@@ -1,0 +1,21 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Estilos globales básicos */
+body {
+  background-color: #0f0f15; /* wf-dark */
+  color: #ffffff;
+}
+
+/* Scrollbar personalizada estilo Warframe */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #0f0f15;
+}
+::-webkit-scrollbar-thumb {
+  background: #23d9ea;
+  border-radius: 4px;
+}
