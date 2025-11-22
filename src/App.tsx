@@ -105,7 +105,7 @@ const ProgressBar = ({ total, current, owned }: { total: number, current: number
   )
 }
 
-const ItemHeader = ({ item, onClick }: { item: UserItem, expanded: boolean, onClick: () => void }) => {
+const ItemHeader = ({ item, onClick }: { item: UserItem, onClick: () => void }) => {
   const statusConfig = STATUS_CONFIG[item.status]
   const StatusIcon = statusConfig.icon
 
@@ -260,7 +260,7 @@ const ItemCard = React.memo(({
       STATUS_CONFIG[item.status].border,
       expanded ? "row-span-2 col-span-1 md:col-span-2 z-20 shadow-2xl scale-[1.01]" : "shadow hover:shadow-lg"
     )}>
-      <ItemHeader item={item} expanded={expanded} onClick={() => setExpanded(!expanded)} />
+      <ItemHeader item={item} onClick={() => setExpanded(!expanded)} />
       <ProgressBar total={compTotal} current={compOwned} owned={item.owned} />
 
       <div className="p-4 flex-1 flex flex-col">
