@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { 
   Search, Trash2, ShieldCheck, Sparkles, Check, 
   ChevronDown, ChevronUp, MapPin, DollarSign, Download, Upload, 
-  Filter, AlertCircle, Hammer, Package, Clock, ExternalLink, X
+  Filter, AlertCircle, Hammer, Package, Clock, ExternalLink, X,
+  Edit3
 } from 'lucide-react'
 import { clsx, type ClassValue } from 'clsx'
 import { twMerge } from 'tailwind-merge'
@@ -17,14 +18,13 @@ const normalizeCategory = (cat: string): ItemCategory | 'Other' => {
   if (c.includes('warframe')) return 'Warframes'
   if (c.includes('primary')) return 'Primary'
   if (c.includes('secondary')) return 'Secondary'
-  if (c.includes('melee')) return 'Melee'
-  if (c.includes('arch')) return 'Archwing' // Arch-gun, Archwing, etc
-  if (c.includes('companion') || c.includes('sentinel') || c.includes('robotic')) return 'Companions'
+  if (c.includes('melee') && !c.includes('arch')) return 'Melee'
+  if (c.includes('arch') || c.includes('archwing')) return 'Archwing' 
+  if (c.includes('companion') || c.includes('sentinel') || c.includes('robotic') || c.includes('pet')) return 'Companions'
   return 'Other'
 }
 
 const generateMarketSlug = (name: string) => {
-  // Regla general: snake_case. Si es Prime, suele llevar _set al final
   let slug = name.toLowerCase().replace(/ /g, '_').replace(/'/g, '').replace(/-/g, '_')
   if (name.toLowerCase().includes('prime') && !name.toLowerCase().includes('set')) {
     slug += '_set'
@@ -61,10 +61,9 @@ interface Component {
   itemCount: number
   imageName?: string
   drops?: Drop[]
-  owned: boolean // User state
+  owned: boolean 
 }
 
-// Estructura reducida para guardar en API Catalog
 interface ApiItem {
   uniqueName: string
   name: string
@@ -73,23 +72,22 @@ interface ApiItem {
   isPrime: boolean
   description?: string
   masteryReq?: number
-  components?: Component[] // Ahora SÍ viene lleno desde el inicio
-  drops?: Drop[] // Drops del item principal (blueprints)
+  components?: Component[] 
+  drops?: Drop[] 
 }
 
 interface UserItem extends ApiItem {
-  id: number // Timestamp
+  id: number // Timestamp + Random para unicidad absoluta
   owned: boolean
   mastered: boolean
   status: FarmingStatus
   duplicates: number
-  notes?: string
+  notes?: string // Nuevo campo para diferenciar builds
 }
 
-// --- SUB-COMPONENTES (Micro-arquitectura) ---
+// --- SUB-COMPONENTES ---
 
 const ProgressBar = ({ total, current, owned }: { total: number, current: number, owned: boolean }) => {
-  // Si no hay componentes, es binario (0 o 100)
   let percent = 0
   if (total === 0) {
     percent = owned ? 100 : 0
@@ -98,7 +96,7 @@ const ProgressBar = ({ total, current, owned }: { total: number, current: number
   }
 
   return (
-    <div className="absolute bottom-0 left-0 right-0 h-1 bg-gray-900">
+    <div className="absolute bottom-0 left-0 right-0 h-1 bg-gray-900 z-10">
       <div 
         className={cn("h-full transition-all duration-500", percent === 100 ? "bg-green-500" : "bg-wf-accent")} 
         style={{ width: `${percent}%` }} 
@@ -131,7 +129,6 @@ const ItemHeader = ({ item, onClick }: { item: UserItem, expanded: boolean, onCl
         {statusConfig.label}
       </div>
 
-      {/* Overlay Hover */}
       <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
     </div>
   )
@@ -162,7 +159,6 @@ const StatusSelector = ({ current, onChange }: { current: FarmingStatus, onChang
 }
 
 const ComponentsList = ({ item, onToggleComp }: { item: UserItem, onToggleComp: (idx: number) => void }) => {
-  // Si no tiene componentes, mostramos drops del item principal (blueprint)
   if (!item.components || item.components.length === 0) {
     return (
       <div className="bg-black/20 rounded p-3 border border-gray-800 mb-3">
@@ -203,13 +199,12 @@ const ComponentsList = ({ item, onToggleComp }: { item: UserItem, onToggleComp: 
               </label>
             </div>
             
-            {/* Drops del componente */}
             {!comp.owned && comp.drops && comp.drops.length > 0 && (
               <div className="pl-6 text-[10px] text-gray-500 border-l border-gray-800 ml-2 space-y-0.5">
                 {comp.drops.slice(0, 2).map((d, i) => (
                   <div key={i} className="flex justify-between">
-                     <span className="truncate max-w-[120px]">{d.location}</span>
-                     <span className="text-gray-700">{d.rarity || (d.chance + '%')}</span>
+                      <span className="truncate max-w-[120px]">{d.location}</span>
+                      <span className="text-gray-700">{d.rarity || (d.chance + '%')}</span>
                   </div>
                 ))}
               </div>
@@ -221,59 +216,28 @@ const ComponentsList = ({ item, onToggleComp }: { item: UserItem, onToggleComp: 
   )
 }
 
-const ItemActions = ({ item, onToggleProp, onDelete }: { item: UserItem, onToggleProp: any, onDelete: any }) => {
-  const marketSlug = generateMarketSlug(item.name)
-  
-  return (
-    <div className="flex items-center justify-between pt-2 border-t border-gray-800 mt-auto">
-      <div className="flex gap-1">
-        <button 
-          onClick={() => onToggleProp(item.uniqueName, 'mastered')} 
-          className={cn("p-1.5 rounded transition-colors", item.mastered ? "text-wf-gold bg-wf-gold/10" : "text-gray-600 hover:text-white")}
-          title="Toggle Mastered"
-        >
-          <ShieldCheck size={16}/>
-        </button>
-        <a 
-          href={`https://warframe.market/items/${marketSlug}`} 
-          target="_blank" 
-          rel="noreferrer"
-          className="p-1.5 rounded text-gray-600 hover:text-green-400 hover:bg-green-900/10"
-          title="Ver en Market"
-        >
-          <DollarSign size={16}/>
-        </a>
-        <a 
-          href={`https://warframe.fandom.com/wiki/${item.name.replace(/ /g, '_')}`} 
-          target="_blank" 
-          rel="noreferrer"
-          className="p-1.5 rounded text-gray-600 hover:text-blue-400 hover:bg-blue-900/10"
-          title="Ver Wiki"
-        >
-          <ExternalLink size={16}/>
-        </a>
-      </div>
-      
-      <button onClick={() => onDelete(item.uniqueName)} className="text-gray-600 hover:text-red-500 p-1.5">
-        <Trash2 size={16}/>
-      </button>
-    </div>
-  )
-}
-
-// --- COMPONENTE PRINCIPAL DE TARJETA ---
+// --- TARJETA PRINCIPAL ---
 const ItemCard = React.memo(({ 
   item, updateItem, deleteItem 
 }: { 
   item: UserItem, 
-  updateItem: (id: string, changes: Partial<UserItem>) => void, 
-  deleteItem: (id: string) => void 
+  updateItem: (id: number, changes: Partial<UserItem>) => void, 
+  deleteItem: (id: number) => void 
 }) => {
   const [expanded, setExpanded] = useState(false)
-
-  const handleStatusChange = (status: FarmingStatus) => updateItem(item.uniqueName, { status })
-  const handleToggleProp = (id: string, prop: keyof UserItem) => updateItem(id, { [prop]: !item[prop] })
+  const [isEditingNote, setIsEditingNote] = useState(false)
+  const [noteTemp, setNoteTemp] = useState(item.notes || '')
   
+  const marketSlug = generateMarketSlug(item.name)
+
+  const handleStatusChange = (status: FarmingStatus) => updateItem(item.id, { status })
+  const handleToggleProp = (prop: keyof UserItem) => updateItem(item.id, { [prop]: !item[prop] })
+  
+  const saveNote = () => {
+    updateItem(item.id, { notes: noteTemp })
+    setIsEditingNote(false)
+  }
+
   const handleToggleComponent = (idx: number) => {
     if (!item.components) return
     const newComps = [...item.components]
@@ -284,10 +248,9 @@ const ItemCard = React.memo(({
     let newStatus = item.status
     if (allOwned && item.status === 'farming') newStatus = 'ready_to_build'
     
-    updateItem(item.uniqueName, { components: newComps, status: newStatus })
+    updateItem(item.id, { components: newComps, status: newStatus })
   }
 
-  // Calculo de progreso
   const compTotal = item.components?.length || 0
   const compOwned = item.components?.filter(c => c.owned).length || 0
 
@@ -301,13 +264,41 @@ const ItemCard = React.memo(({
       <ProgressBar total={compTotal} current={compOwned} owned={item.owned} />
 
       <div className="p-4 flex-1 flex flex-col">
-        {/* Título y Categoría */}
-        <div className="flex justify-between items-start mb-3">
-          <div>
-            <h3 className="font-bold text-white text-lg leading-tight">{item.name}</h3>
-            <span className="text-[10px] text-gray-500 uppercase tracking-wider border border-gray-800 px-1 rounded mt-1 inline-block">{item.category}</span>
+        {/* Título y Notas */}
+        <div className="flex justify-between items-start mb-2">
+          <div className="flex-1 mr-2 overflow-hidden">
+            <h3 className="font-bold text-white text-lg leading-tight truncate">{item.name}</h3>
+            
+            {/* Edición de Nota / Apodo */}
+            <div onClick={e => e.stopPropagation()} className="mt-1 h-6">
+              {isEditingNote ? (
+                <div className="flex items-center gap-1 animate-in fade-in">
+                  <input 
+                    className="bg-gray-900 border border-gray-700 text-xs px-2 py-0.5 rounded text-white w-full focus:border-wf-accent outline-none"
+                    value={noteTemp}
+                    onChange={(e) => setNoteTemp(e.target.value)}
+                    placeholder="Ej: Build Eidolon..."
+                    autoFocus
+                    onKeyDown={(e) => e.key === 'Enter' && saveNote()}
+                  />
+                  <button onClick={saveNote} className="text-green-400 hover:text-green-300"><Check size={14}/></button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 group/note">
+                  <p 
+                    onClick={() => { setIsEditingNote(true); setExpanded(true); }} 
+                    className={cn("text-xs cursor-pointer truncate", item.notes ? "text-wf-accent italic" : "text-gray-600")}
+                  >
+                    {item.notes || item.category}
+                  </p>
+                  <button onClick={() => setIsEditingNote(true)} className="opacity-0 group-hover/note:opacity-100 text-gray-500 hover:text-white transition-opacity">
+                    <Edit3 size={10}/>
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
-          <button onClick={() => setExpanded(!expanded)} className="text-gray-500 hover:text-white">
+          <button onClick={() => setExpanded(!expanded)} className="text-gray-500 hover:text-white shrink-0 mt-1">
             {expanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
           </button>
         </div>
@@ -320,20 +311,31 @@ const ItemCard = React.memo(({
             
             <div className="mt-auto pt-4">
                <button 
-                onClick={() => handleToggleProp(item.uniqueName, 'owned')}
+                onClick={() => handleToggleProp('owned')}
                 className={cn("w-full py-2 rounded text-xs font-bold border transition-colors flex justify-center items-center gap-2 mb-4", item.owned ? "bg-green-900/20 border-green-500 text-green-400" : "bg-gray-800 border-gray-700 text-gray-300 hover:bg-gray-700")}
               >
                 {item.owned ? <Check size={14}/> : null}
                 {item.owned ? 'ITEM COMPLETADO' : 'MARCAR COMO POSEÍDO'}
               </button>
-              <ItemActions item={item} onToggleProp={handleToggleProp} onDelete={deleteItem} />
+              
+              <div className="flex items-center justify-between pt-2 border-t border-gray-800 mt-auto">
+                <div className="flex gap-1">
+                  <button onClick={() => handleToggleProp('mastered')} className={cn("p-1.5 rounded transition-colors", item.mastered ? "text-wf-gold bg-wf-gold/10" : "text-gray-600 hover:text-white")} title="Toggle Mastered">
+                    <ShieldCheck size={16}/>
+                  </button>
+                  <a href={`https://warframe.market/items/${marketSlug}`} target="_blank" rel="noreferrer" className="p-1.5 rounded text-gray-600 hover:text-green-400 hover:bg-green-900/10"><DollarSign size={16}/></a>
+                  <a href={`https://warframe.fandom.com/wiki/${item.name.replace(/ /g, '_')}`} target="_blank" rel="noreferrer" className="p-1.5 rounded text-gray-600 hover:text-blue-400 hover:bg-blue-900/10"><ExternalLink size={16}/></a>
+                </div>
+                <button onClick={() => deleteItem(item.id)} className="text-gray-600 hover:text-red-500 p-1.5">
+                  <Trash2 size={16}/>
+                </button>
+              </div>
             </div>
           </div>
         ) : (
-          // Vista Compacta
-          <div className="mt-auto flex items-center gap-2">
+          <div className="mt-auto flex items-center gap-2 pt-2">
              <button 
-              onClick={(e) => { e.stopPropagation(); handleToggleProp(item.uniqueName, 'owned') }}
+              onClick={(e) => { e.stopPropagation(); handleToggleProp('owned') }}
               className={cn("flex-1 py-1.5 rounded text-[10px] font-bold border transition-colors text-center", item.owned ? "bg-green-900/20 border-green-500 text-green-400" : "border-gray-700 text-gray-500 hover:bg-gray-800 hover:text-gray-300")}
             >
               {item.owned ? 'POSEÍDO' : 'PENDIENTE'}
@@ -347,7 +349,6 @@ const ItemCard = React.memo(({
 
 // --- APP PRINCIPAL ---
 function App() {
-  // Estados
   const [catalog, setCatalog] = useState<ApiItem[]>([])
   const [inventory, setInventory] = useState<UserItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -358,23 +359,30 @@ function App() {
   const [statusFilter, setStatusFilter] = useState<FarmingStatus | 'All'>('All')
   const [hideMastered, setHideMastered] = useState(false)
 
-  // Carga Inicial (Descarga masiva de WFCD)
+  // Carga Inicial
   useEffect(() => {
     const init = async () => {
-      // 1. Cargar Inventario Local
-      const savedInv = localStorage.getItem('wf-inventory-fixed')
-      if (savedInv) setInventory(JSON.parse(savedInv))
+      const savedInv = localStorage.getItem('wf-inventory-v2')
+      if (savedInv) {
+        try {
+          const parsed = JSON.parse(savedInv)
+          // Migración simple si vienen de la versión anterior sin ID numérico
+          const migrated = parsed.map((i: any) => ({
+            ...i,
+            id: i.id || Date.now() + Math.random(),
+            notes: i.notes || ''
+          }))
+          setInventory(migrated)
+        } catch(e) { console.error("Error parsing save", e) }
+      }
 
-      // 2. Descargar Catálogo WFCD
       try {
         const res = await fetch(DATA_SOURCE)
         if (!res.ok) throw new Error("Failed to load catalog")
         const data = await res.json()
 
-        // Filtrar y Normalizar (Esto es pesado, solo se hace una vez)
         const cleanCatalog: ApiItem[] = data
           .filter((i: any) => 
-            // Filtro de categorías basura
             !i.uniqueName.includes('Recipes') && 
             !i.name.includes('Twitch') &&
             ['Warframes', 'Primary', 'Secondary', 'Melee', 'Arch-Gun', 'Arch-Melee', 'Archwing', 'Sentinels', 'Pets'].some(c => i.category.includes(c))
@@ -387,7 +395,7 @@ function App() {
             isPrime: i.name.includes('Prime'),
             description: i.description,
             masteryReq: i.masteryReq,
-            drops: i.drops, // Guardamos drops del item principal
+            drops: i.drops,
             components: i.components ? i.components.map((c: any) => ({
               uniqueName: c.uniqueName || c.name,
               name: c.name,
@@ -401,7 +409,6 @@ function App() {
         setCatalog(cleanCatalog)
       } catch (e) {
         console.error("Error loading catalog", e)
-        alert("Error cargando la base de datos. Revisa tu conexión.")
       } finally {
         setLoading(false)
       }
@@ -411,37 +418,36 @@ function App() {
 
   // Auto-guardado
   useEffect(() => {
-    if (inventory.length > 0 || !loading) {
-      localStorage.setItem('wf-inventory-fixed', JSON.stringify(inventory))
+    if (!loading) {
+      localStorage.setItem('wf-inventory-v2', JSON.stringify(inventory))
     }
   }, [inventory, loading])
 
   // --- Lógica de Negocio ---
 
   const addItem = useCallback((catItem: ApiItem) => {
-    if (inventory.some(i => i.uniqueName === catItem.uniqueName)) return
-    
+    // Permitimos duplicados. Generamos ID único.
     const newItem: UserItem = {
       ...catItem,
-      id: Date.now(),
+      id: Date.now() + Math.random(),
       owned: false,
       mastered: false,
-      status: 'none',
-      duplicates: 0
+      status: 'farming',
+      duplicates: 0,
+      notes: ''
     }
     setInventory(prev => [newItem, ...prev])
     setSearch('')
-  }, [inventory])
-
-  const updateItem = useCallback((uniqueName: string, changes: Partial<UserItem>) => {
-    setInventory(prev => prev.map(i => i.uniqueName === uniqueName ? { ...i, ...changes } : i))
   }, [])
 
-  const deleteItem = useCallback((uniqueName: string) => {
-    setInventory(prev => prev.filter(i => i.uniqueName !== uniqueName))
+  const updateItem = useCallback((id: number, changes: Partial<UserItem>) => {
+    setInventory(prev => prev.map(i => i.id === id ? { ...i, ...changes } : i))
   }, [])
 
-  // Filtros y Búsqueda
+  const deleteItem = useCallback((id: number) => {
+    setInventory(prev => prev.filter(i => i.id !== id))
+  }, [])
+
   const searchResults = useMemo(() => {
     if (search.length < 2) return []
     return catalog
@@ -449,7 +455,7 @@ function App() {
       .slice(0, 10)
   }, [search, catalog])
 
-  const visibleInventory = useMemo(() => {
+  const filteredInventory = useMemo(() => {
     return inventory.filter(i => {
       if (catFilter !== 'All' && i.category !== catFilter) return false
       if (statusFilter !== 'All' && i.status !== statusFilter) return false
@@ -459,6 +465,34 @@ function App() {
     })
   }, [inventory, catFilter, statusFilter, hideMastered, search])
 
+  // Agrupación por categorías para la vista
+  const groupedInventory = useMemo(() => {
+    // Si hay un filtro específico de categoría, mostramos solo esa como un grupo
+    if (catFilter !== 'All') return { [catFilter]: filteredInventory }
+    
+    // Si es "All", agrupamos todo lo filtrado
+    const groups: Record<string, UserItem[]> = {}
+    filteredInventory.forEach(item => {
+      if (!groups[item.category]) groups[item.category] = []
+      groups[item.category].push(item)
+    })
+    
+    // Ordenar claves visualmente
+    const orderedGroups: Record<string, UserItem[]> = {}
+    const order = ['Warframes', 'Primary', 'Secondary', 'Melee', 'Companions', 'Archwing', 'Other']
+    
+    // Primero los del orden establecido
+    order.forEach(key => {
+      if (groups[key] && groups[key].length > 0) orderedGroups[key] = groups[key]
+    })
+    // Luego el resto si hubiera
+    Object.keys(groups).forEach(key => {
+      if (!order.includes(key)) orderedGroups[key] = groups[key]
+    })
+    
+    return orderedGroups
+  }, [filteredInventory, catFilter])
+
   const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -467,7 +501,9 @@ function App() {
       try {
         const data = JSON.parse(ev.target?.result as string)
         if (Array.isArray(data)) {
-          setInventory(data)
+          // Asegurar IDs al importar
+          const cleanData = data.map(i => ({...i, id: i.id || Date.now() + Math.random()}))
+          setInventory(cleanData)
           alert("Importado con éxito")
         }
       } catch (e) { alert("JSON inválido") }
@@ -482,7 +518,6 @@ function App() {
     a.click()
   }
 
-  // Stats
   const stats = {
     mastered: inventory.filter(i => i.mastered).length,
     farming: inventory.filter(i => i.status === 'farming').length
@@ -527,20 +562,25 @@ function App() {
             {searchResults.length > 0 && (
               <div className="absolute top-full left-0 right-0 bg-[#12121a] border border-gray-700 mt-1 rounded shadow-2xl max-h-80 overflow-y-auto">
                 {searchResults.map(item => {
-                  const exists = inventory.some(i => i.uniqueName === item.uniqueName)
+                  const count = inventory.filter(i => i.uniqueName === item.uniqueName).length
                   return (
                     <button 
                       key={item.uniqueName}
                       onClick={() => addItem(item)}
-                      disabled={exists}
                       className="w-full text-left px-4 py-2 hover:bg-gray-800 flex items-center gap-3 border-b border-gray-800/50 last:border-0"
                     >
-                      <img src={`${CDN_BASE}${item.imageName}`} className="w-8 h-8 object-contain bg-gray-900 rounded" />
+                      <img src={`${CDN_BASE}${item.imageName}`} className="w-8 h-8 object-contain bg-gray-900 rounded" alt=""/>
                       <div className="flex-1">
                         <p className={cn("text-sm font-bold", item.isPrime ? "text-wf-gold" : "text-white")}>{item.name}</p>
                         <p className="text-[10px] text-gray-500 uppercase">{item.category}</p>
                       </div>
-                      {exists ? <Check size={14} className="text-green-500"/> : <span className="text-[10px] bg-wf-accent text-black px-1.5 py-0.5 rounded font-bold">+ ADD</span>}
+                      {count > 0 ? (
+                        <span className="text-[10px] bg-gray-700 text-white px-2 py-0.5 rounded border border-gray-600">
+                          {count} COPIAS
+                        </span>
+                      ) : (
+                        <span className="text-[10px] bg-wf-accent text-black px-1.5 py-0.5 rounded font-bold">+ ADD</span>
+                      )}
                     </button>
                   )
                 })}
@@ -548,7 +588,6 @@ function App() {
             )}
           </div>
 
-          {/* Tools */}
           <div className="flex gap-2">
              <button onClick={handleExport} className="p-2 hover:bg-gray-800 rounded text-gray-400 hover:text-white"><Download size={18}/></button>
              <label className="p-2 hover:bg-gray-800 rounded text-gray-400 hover:text-white cursor-pointer"><Upload size={18}/><input type="file" className="hidden" onChange={handleImport}/></label>
@@ -559,7 +598,7 @@ function App() {
         <div className="bg-[#12121a] border-b border-gray-800 py-2 px-4 overflow-x-auto">
            <div className="flex items-center gap-3 min-w-max max-w-7xl mx-auto">
               <Filter size={14} className="text-gray-500"/>
-              <select value={catFilter} onChange={e => setCatFilter(e.target.value as any)} className="bg-black border border-gray-700 text-xs rounded px-2 py-1 text-gray-300">
+              <select value={catFilter} onChange={e => setCatFilter(e.target.value as any)} className="bg-black border border-gray-700 text-xs rounded px-2 py-1 text-gray-300 focus:border-wf-accent outline-none">
                 <option value="All">Todas Categorías</option>
                 <option value="Warframes">Warframes</option>
                 <option value="Primary">Primary</option>
@@ -569,7 +608,7 @@ function App() {
                 <option value="Companions">Companions</option>
               </select>
 
-              <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as any)} className="bg-black border border-gray-700 text-xs rounded px-2 py-1 text-gray-300">
+              <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as any)} className="bg-black border border-gray-700 text-xs rounded px-2 py-1 text-gray-300 focus:border-wf-accent outline-none">
                 <option value="All">Todos Estados</option>
                 {Object.entries(STATUS_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
               </select>
@@ -582,23 +621,37 @@ function App() {
         </div>
       </header>
 
-      {/* Content */}
+      {/* Content - Agrupado */}
       <main className="max-w-7xl mx-auto px-4 py-6">
-        {visibleInventory.length === 0 ? (
+        {filteredInventory.length === 0 ? (
           <div className="text-center py-20 opacity-50">
             <Package size={60} className="mx-auto mb-4 text-gray-700"/>
             <h2 className="text-xl font-bold text-gray-500">Inventario Vacío</h2>
             <p className="text-sm text-gray-600">Usa el buscador para añadir items desde la base de datos.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 items-start">
-            {visibleInventory.map(item => (
-              <ItemCard 
-                key={item.id} 
-                item={item} 
-                updateItem={updateItem} 
-                deleteItem={deleteItem} 
-              />
+          <div className="space-y-12">
+            {Object.entries(groupedInventory).map(([category, items]) => (
+              <section key={category} className="animate-in fade-in slide-in-from-bottom-2 duration-500">
+                <div className="flex items-center gap-3 mb-4 pb-2 border-b border-gray-800/50">
+                   {category === 'Warframes' && <ShieldCheck className="text-wf-gold"/>}
+                   {category === 'Primary' && <Hammer className="text-blue-400"/>}
+                   {category === 'Secondary' && <DollarSign className="text-purple-400"/>}
+                   <h2 className="text-xl font-bold text-gray-200 tracking-wider uppercase">{category}</h2>
+                   <span className="text-xs bg-gray-800 text-gray-400 px-2 py-0.5 rounded-full">{items.length}</span>
+                </div>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 items-start">
+                  {items.map(item => (
+                    <ItemCard 
+                      key={item.id} 
+                      item={item} 
+                      updateItem={updateItem} 
+                      deleteItem={deleteItem} 
+                    />
+                  ))}
+                </div>
+              </section>
             ))}
           </div>
         )}
