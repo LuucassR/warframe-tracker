@@ -107,7 +107,7 @@ const ProgressBar = ({ total, current, owned }: { total: number, current: number
   )
 }
 
-const ItemHeader = ({ item, expanded, onClick }: { item: UserItem, expanded: boolean, onClick: () => void }) => {
+const ItemHeader = ({ item, onClick }: { item: UserItem, expanded: boolean, onClick: () => void }) => {
   const statusConfig = STATUS_CONFIG[item.status]
   const StatusIcon = statusConfig.icon
 

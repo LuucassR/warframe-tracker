@@ -5,5 +5,5 @@ import react from '@vitejs/plugin-react'
 // Ejemplo: si tu repo es https://github.com/juan/wf-tracker, pon '/wf-tracker/'
 export default defineConfig({
   plugins: [react()],
-  base: '/NOMBRE_DE_TU_REPO/', 
+  base: '/warframe-tracker/', 
 })
